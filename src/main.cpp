@@ -3,57 +3,101 @@
 #include <tinyxml2.h>
 #include <cmath>
 #include <fstream>
+#include <string>
+#include <tuple>
 
 #include "functions.h"
 
 
+struct attribute_type {
+
+    std::string type;
+    std::string parser;
+    std::string name;
+
+};
 
 
-void parseElement(const tinyxml2::XMLElement* elem, std::ostream &os) {
+struct parsed_type : public attribute_type{
 
-    // iterate over simple types
+    std::string super{};
+    std::vector<attribute_type> attributes{};
+
+};
+
+
+static std::vector<parsed_type> types{};
+
+
+
+
+attribute_type parseType(const std::string &e, const std::string &_name, const std::string &_varname, bool multi = false) {
+
+    // get type
+    std::string type_str;
+    std::string parse_str;
+
+    //tinyxml2::XMLElement *elem;
+
+
+    auto name = _name.c_str();
+    auto varname = _varname.c_str();
+
+    if (strcmp(e.c_str(), "xs:double") == 0) {
+        type_str  = "_Attribute<double>";
+        parse_str = string_format("\tt.%s = elem->DoubleAttribute(\"%s\", 0.0);\n", varname, name);
+    } else if (strcmp(e.c_str(), "xs:integer") == 0) {
+        type_str = "_Attribute<int>";
+        parse_str = string_format("\tt.%s = elem->IntAttribute(\"%s\", 0);\n", varname, name);
+    } else if (strcmp(e.c_str(), "xs:nonNegativeInteger") == 0) {
+        type_str = "_Attribute<unsigned int>";
+        parse_str = string_format("\tt.%s = elem->UnsignedAttribute(\"%s\", 0);\n", varname, name);
+    } else if (strcmp(e.c_str(), "xs:string") == 0) {
+        type_str = "_Attribute<std::string>";
+        parse_str = string_format("\tt.%s = std::string(elem->Attribute(\"%s\"));\n", varname, name);
+    } else if (strcmp(e.c_str(), "xs:float") == 0) {
+        type_str = "_Attribute<float>";
+        parse_str = string_format("\tt.%s = elem->FloatAttribute(\"%s\", 0.0f);\n", varname, name);
+    } else if(multi) {
+        type_str = e;
+        parse_str = string_format("\tparse_%s(elem->FirstChildElement(\"%s\"), t.%s);\n", type_str.c_str(), name, varname);
+    } else {
+        type_str = e;
+        parse_str = string_format("\tparse_%s(elem->FirstChildElement(\"%s\"), t.%s);\n", type_str.c_str(), name, varname);
+    }
+
+
+    // TODO: other types
+
+    return {type_str, parse_str, _varname};
+
+}
+
+
+
+
+void parseElement(const tinyxml2::XMLElement* elem) {
+
+
     auto st = elem->FirstChildElement("xs:simpleType");
     while(st != nullptr) {
 
         // get name and create struct
         auto ctName = st->Attribute("name");
-        os << string_format("struct %s;\n", ctName);
 
-        st = st->NextSiblingElement("xs:simpleType");
+        // create type
+        parsed_type tp;
 
-    }
-
-    st = elem->FirstChildElement("xs:simpleType");
-    while(st != nullptr) {
-
-        // get name and create struct
-        auto ctName = st->Attribute("name");
-        os << string_format("struct %s {\n", ctName);
+        // set attributes
+        tp.name = ctName;
 
         // <xs:attribute name="revMajor" type="xs:integer" fixed="1" use="required"/>
         auto res = st->FirstChildElement("xs:restriction");
         auto un = st->FirstChildElement("xs:union");
         if(res != nullptr) {
 
-            // get attributes
-            auto type  = res->Attribute("base");
-
-            // get type
-            std::string type_str;
-            if(strcmp(type, "xs:double") == 0)
-                type_str = "double";
-            else if(strcmp(type, "xs:integer") == 0)
-                type_str = "int";
-            else if(strcmp(type, "xs:nonNegativeInteger") == 0)
-                type_str = "unsigned int";
-            else if(strcmp(type, "xs:string") == 0)
-                type_str = "std::string";
-            else if(strcmp(type, "xs:float") == 0)
-                type_str = "float";
-            else
-                throw std::invalid_argument(string_format("Unknown type %s", type).c_str());
-
-            os << string_format("\tAttribute<%s> value;\n", type_str.c_str());
+            auto type = parseType(res->Attribute("base"), "", "");
+            tp.super = type.type;
 
         } else if(un != nullptr) {
 
@@ -61,30 +105,26 @@ void parseElement(const tinyxml2::XMLElement* elem, std::ostream &os) {
             auto type  = un->Attribute("memberTypes");
 
             unsigned int i = 0;
-            for(auto e : split(type)) {
+            for(const auto &e : split(type)) {
 
-                // get type
-                std::string type_str;
-                if (strcmp(e.c_str(), "xs:double") == 0)
-                    type_str = "double";
-                else if (strcmp(e.c_str(), "xs:integer") == 0)
-                    type_str = "int";
-                else if (strcmp(e.c_str(), "xs:nonNegativeInteger") == 0)
-                    type_str = "unsigned int";
-                else if (strcmp(e.c_str(), "xs:string") == 0)
-                    type_str = "std::string";
-                else if (strcmp(e.c_str(), "xs:float") == 0)
-                    type_str = "float";
-                else
-                    type_str = e;
+                auto attr = parseType(e, "", string_format("_v%i", i++));
 
-                os << string_format("\tAttribute<%s> v%i;\n", type_str.c_str(), ++i);
+                // update data
+                attr.type = string_format("_Attribute<%s>", attr.type.c_str());
+                attr.parser = "";
+
+                // add attribute
+                tp.attributes.emplace_back(attr);
 
             }
 
+            // set super type
+            tp.super = string_format("_Union<%i>", i);
+
         }
 
-        os << "};\n\n";
+        // add type to list
+        types.emplace_back(tp);
 
         // get next one
         st = st->NextSiblingElement("xs:simpleType");
@@ -110,7 +150,51 @@ void parseElement(const tinyxml2::XMLElement* elem, std::ostream &os) {
 
         // get name and create struct
         auto ctName = st->Attribute("name");
-        os << string_format("struct %s {\n", ctName);
+
+        // create type
+        parsed_type tp;
+
+        // set attributes
+        tp.name = ctName;
+        tp.parser = "";
+
+
+
+        /*
+         *  <xs:sequence>
+         *      <xs:element name="geoReference"     type="t_header_GeoReference"    minOccurs="0"   maxOccurs="1"/>
+         *      <xs:element name="offset"           type="t_header_Offset"          minOccurs="0"   maxOccurs="1"/>
+         *      <xs:group ref="g_additionalData"/>
+         *  </xs:sequence>
+         */
+        // get sequences
+        auto seq = st->FirstChildElement("xs:sequence");
+        if(seq != nullptr) {
+
+            auto se = seq->FirstChildElement("xs:element");
+            while(se != nullptr) {
+
+
+                // get attributes
+                auto aName  = se->Attribute("name");
+                auto type   = se->Attribute("type");
+
+                // get attributes
+                auto attr = parseType(type, aName, string_format("__vec_%s", aName), true);
+
+                // update data
+                attr.type = string_format("_Vector<%s>", attr.type.c_str());
+
+                // add attribute
+                tp.attributes.emplace_back(attr);
+
+                // next element
+                se = se->NextSiblingElement("xs:element");
+
+            }
+
+        }
+
 
         // <xs:attribute name="revMajor" type="xs:integer" fixed="1" use="required"/>
         auto at = st->FirstChildElement("xs:attribute");
@@ -122,29 +206,21 @@ void parseElement(const tinyxml2::XMLElement* elem, std::ostream &os) {
             auto fixed = at->Attribute("fixed");
             auto use   = at->Attribute("use");
 
-            // get type
-            std::string type_str;
-            if(strcmp(type, "xs:double") == 0)
-                type_str = "double";
-            else if(strcmp(type, "xs:integer") == 0)
-                type_str = "int";
-            else if(strcmp(type, "xs:nonNegativeInteger") == 0)
-                type_str = "unsigned int";
-            else if(strcmp(type, "xs:string") == 0)
-                type_str = "std::string";
-            else if(strcmp(type, "xs:float") == 0)
-                type_str = "float";
-            else
-                type_str = type;
 
-            os << string_format("\tAttribute<%s> %s;\n", type_str.c_str(), aName);
+            // get attributes
+            auto attr = parseType(type, aName, string_format("_%s", aName));
+
+            // add attribute
+            tp.attributes.emplace_back(attr);
+
 
             // next attribute
-            at = at->NextSiblingElement("xs:Attribute");
+            at = at->NextSiblingElement("xs:attribute");
 
         }
 
-        os << "};\n\n";
+        // add to types
+        types.emplace_back(tp);
 
         // get next one
         st = st->NextSiblingElement("xs:complexType");
@@ -154,18 +230,16 @@ void parseElement(const tinyxml2::XMLElement* elem, std::ostream &os) {
 }
 
 
-void parseScheme(const tinyxml2::XMLElement* elem, std::ostream &os) {
+void parseScheme(const tinyxml2::XMLElement* elem) {
 
-    os << "#include <Attribute.h>\n\n";
-
-    parseElement(elem, os);
+    parseElement(elem);
 
 }
 
 
 int main(int argc, char* argv[]) {
 
-    if(argc != 3)
+    if(argc < 4)
         throw std::invalid_argument("please provide file name");
 
     // xml document
@@ -181,17 +255,92 @@ int main(int argc, char* argv[]) {
     if (schema == nullptr)
         throw std::runtime_error("Schema element could not be found!");
 
-    // parse schema
-    parseScheme(schema, std::cout);
+
+    // parse scheme
+    parseScheme(schema);
+
+    // write the shit to a file
+    std::ofstream fs;
+    fs.open(argv[2]);
+
+
+    fs << "#include <string>\n";
+    fs << "#include <Attribute.h>\n";
+    fs << "#include <tinyxml2.h>\n\n";
+
+
+    // print class pre-definitions
+    for(const auto &tp : types)
+        if(!tp.attributes.empty() || tp.super.empty())
+            fs << string_format("struct %s;\n", tp.name.c_str());
+
+
+
+    fs << "\n\n";
+
+    // print class pre-definitions
+    for(const auto &tp : types)
+        if(tp.attributes.empty() && !tp.super.empty())
+            fs << string_format("typedef %s %s;\n", tp.super.c_str(), tp.name.c_str());
+
+
+
+    fs << "\n\n";
+
+
+    // print class definitions
+    for(const auto &tp : types) {
+
+
+        if(!tp.attributes.empty() || tp.super.empty()) {
+
+            // super class
+            auto sp = tp.super.empty() ? "" : string_format(" : public %s", tp.super.c_str());
+            fs << string_format("\nstruct %s%s {\n\n", tp.name.c_str(), sp.c_str());
+
+            for (const auto &p : tp.attributes)
+                fs << string_format("\t%s %s;\n", p.type.c_str(), p.name.c_str());
+
+            fs << "\n};\n\n";
+
+        }
+
+
+    }
+
+
+    fs << "\n\n";
+
+    // print parse function
+    for(const auto &tp : types)
+        fs << string_format("void parse_%s(tinyxml2::XMLElement *elem, %s& t);\n", tp.name.c_str(), tp.name.c_str());
+
+
 
 
     // write the shit to a file
-    std::ofstream myfile;
-    myfile.open(argv[2]);
+    std::ofstream fscpp;
+    fscpp.open(argv[3]);
 
-    parseScheme(schema, myfile);
 
-    myfile.close();
+    fscpp << "#include \"OpenDRIVE_1.5M.h\"\n\n";
+
+    // print parse function
+    for(const auto &tp : types) {
+
+        fscpp << string_format("void parse_%s(tinyxml2::XMLElement *elem, %s& t) {\n\n", tp.name.c_str(), tp.name.c_str());
+
+        // iterate over attributes
+        for(const auto &p : tp.attributes)
+            fscpp << p.parser;
+
+        fscpp << "\n}\n\n";
+
+    }
+
+
+    fs.close();
+    fscpp.close();
 
     return 0;
 
