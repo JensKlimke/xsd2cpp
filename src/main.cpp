@@ -32,7 +32,7 @@ static std::vector<parsed_type> types{};
 
 
 
-attribute_type parseType(const std::string &e, const std::string &_name, const std::string &_varname) {
+attribute_type parseType(const std::string &_xsdType, const std::string &_xsdFieldName, const std::string &_tarVariable) {
 
     // get type
     std::string type_str;
@@ -40,35 +40,35 @@ attribute_type parseType(const std::string &e, const std::string &_name, const s
 
     tinyxml2::XMLElement *elem;
 
+    // get c strings
+    auto name    = _xsdFieldName.c_str();
+    auto varname = _tarVariable.c_str();
 
-    auto name = _name.c_str();
-    auto varname = _varname.c_str();
+    parse_str = "\t//TODO: implement parse code for " + _tarVariable + " (" + _xsdType + ")\n";
 
-    parse_str = "\t//TODO: implement parse code for " + e + "\n";
-
-    if (strcmp(e.c_str(), "xs:double") == 0) {
+    if (strcmp(_xsdType.c_str(), "xs:double") == 0) {
         type_str  = "_Attribute<double>";
-        parse_str = string_format("\tt.%s = elem->DoubleAttribute(\"%s\", 0.0);\n", varname, name);
-    } else if (strcmp(e.c_str(), "xs:integer") == 0) {
+        parse_str = string_format("\t%s = elem->DoubleAttribute(\"%s\", 0.0);\n", varname, name);
+    } else if (strcmp(_xsdType.c_str(), "xs:integer") == 0) {
         type_str = "_Attribute<int>";
-        parse_str = string_format("\tt.%s = elem->IntAttribute(\"%s\", 0);\n", varname, name);
-    } else if (strcmp(e.c_str(), "xs:nonNegativeInteger") == 0) {
+        parse_str = string_format("\t%s = elem->IntAttribute(\"%s\", 0);\n", varname, name);
+    } else if (strcmp(_xsdType.c_str(), "xs:nonNegativeInteger") == 0) {
         type_str = "_Attribute<unsigned int>";
-        parse_str = string_format("\tt.%s = elem->UnsignedAttribute(\"%s\", 0);\n", varname, name);
-    } else if (strcmp(e.c_str(), "xs:string") == 0) {
+        parse_str = string_format("\t%s = elem->UnsignedAttribute(\"%s\", 0);\n", varname, name);
+    } else if (strcmp(_xsdType.c_str(), "xs:string") == 0) {
         type_str = "_Attribute<std::string>";
-        parse_str = string_format("\tt.%s = std::string(elem->Attribute(\"%s\"));\n", varname, name);
-    } else if (strcmp(e.c_str(), "xs:float") == 0) {
+        parse_str = string_format("\t%s = std::string(elem->Attribute(\"%s\"));\n", varname, name);
+    } else if (strcmp(_xsdType.c_str(), "xs:float") == 0) {
         type_str = "_Attribute<float>";
-        parse_str = string_format("\tt.%s = elem->FloatAttribute(\"%s\", 0.0f);\n", varname, name);
+        parse_str = string_format("\t%s = elem->FloatAttribute(\"%s\", 0.0f);\n", varname, name);
     } else {
-        type_str = e;
+        type_str = _xsdType;
     }
 
 
     // TODO: other types
 
-    return {type_str, parse_str, _varname};
+    return {type_str, parse_str, ""};
 
 }
 
@@ -95,7 +95,7 @@ void parseElement(const tinyxml2::XMLElement* elem) {
         auto un = st->FirstChildElement("xs:union");
         if(res != nullptr) {
 
-            auto type = parseType(res->Attribute("base"), "", "");
+            auto type = parseType(res->Attribute("base"), tp.name, "t");
             tp.super = type.type;
 
             type.type = "";
@@ -110,14 +110,17 @@ void parseElement(const tinyxml2::XMLElement* elem) {
             unsigned int i = 0;
             for(const auto &e : split(type)) {
 
-                auto attr = parseType(e, "", string_format("_v%i", i++));
+                auto attr = parseType(e, "", string_format("t._v%i", i));
 
                 // update data
                 attr.type = string_format("_Attribute<%s>", attr.type.c_str());
+                attr.name = string_format("_v%i", i);
                 attr.parser = "";
 
                 // add attribute
                 tp.attributes.emplace_back(attr);
+
+                i++;
 
             }
 
@@ -161,8 +164,6 @@ void parseElement(const tinyxml2::XMLElement* elem) {
         tp.name = ctName;
         tp.parser = "";
 
-
-
         /*
          *  <xs:sequence>
          *      <xs:element name="geoReference"     type="t_header_GeoReference"    minOccurs="0"   maxOccurs="1"/>
@@ -179,15 +180,21 @@ void parseElement(const tinyxml2::XMLElement* elem) {
 
 
                 // get attributes
-                auto aName  = se->Attribute("name");
-                auto type   = se->Attribute("type");
+                auto origFieldName = se->Attribute("name");
+                auto xsdTypeName   = se->Attribute("type");
 
                 // get attributes
-                auto attr = parseType(type, aName, string_format("__vec_%s", aName));
+                auto attr = parseType(xsdTypeName, origFieldName, "");
 
                 // update data
                 attr.type = string_format("_Vector<%s>", attr.type.c_str());
-                //attr.parser = string_format("\ta = elem->FirstChildElement(\"%s\");\n\twhile(a != nullptr) {\n\t\ta = a->NextSiblingElement(\"%s\");\n\t}\n\n", name, name);
+                attr.name = string_format("__vec_%s", origFieldName);
+
+                // create parser
+                attr.parser = string_format(
+                        "\ta = elem->FirstChildElement(\"%s\");\n\twhile(a != nullptr) {"
+                        "\n\t\t%s t;\n\t\t%s;\n\t\t%s.emplace_back(std::move(t));"
+                        "\n\t\ta = a->NextSiblingElement(\"%s\");\n\t}\n\n", origFieldName, xsdTypeName, attr.parser, xsdTypeName, origFieldName);
 
                 // add attribute
                 tp.attributes.emplace_back(attr);
@@ -205,14 +212,15 @@ void parseElement(const tinyxml2::XMLElement* elem) {
         while(at != nullptr) {
 
             // get attributes
-            auto aName  = at->Attribute("name");
+            auto aName = at->Attribute("name");
             auto type  = at->Attribute("type");
             auto fixed = at->Attribute("fixed");
             auto use   = at->Attribute("use");
 
 
             // get attributes
-            auto attr = parseType(type, aName, string_format("_%s", aName));
+            auto attr = parseType(type, aName, string_format("t._%s", aName));
+            attr.name = string_format("_%s", aName);
 
             // add attribute
             tp.attributes.emplace_back(attr);
