@@ -22,6 +22,7 @@ struct parsed_type : public attribute_type{
 
     std::string super{};
     std::vector<attribute_type> attributes{};
+    bool is_typedef = false;
 
 };
 
@@ -31,17 +32,19 @@ static std::vector<parsed_type> types{};
 
 
 
-attribute_type parseType(const std::string &e, const std::string &_name, const std::string &_varname, bool multi = false) {
+attribute_type parseType(const std::string &e, const std::string &_name, const std::string &_varname) {
 
     // get type
     std::string type_str;
     std::string parse_str;
 
-    //tinyxml2::XMLElement *elem;
+    tinyxml2::XMLElement *elem;
 
 
     auto name = _name.c_str();
     auto varname = _varname.c_str();
+
+    parse_str = "\t//TODO: implement parse code for " + e + "\n";
 
     if (strcmp(e.c_str(), "xs:double") == 0) {
         type_str  = "_Attribute<double>";
@@ -58,12 +61,8 @@ attribute_type parseType(const std::string &e, const std::string &_name, const s
     } else if (strcmp(e.c_str(), "xs:float") == 0) {
         type_str = "_Attribute<float>";
         parse_str = string_format("\tt.%s = elem->FloatAttribute(\"%s\", 0.0f);\n", varname, name);
-    } else if(multi) {
-        type_str = e;
-        parse_str = string_format("\tparse_%s(elem->FirstChildElement(\"%s\"), t.%s);\n", type_str.c_str(), name, varname);
     } else {
         type_str = e;
-        parse_str = string_format("\tparse_%s(elem->FirstChildElement(\"%s\"), t.%s);\n", type_str.c_str(), name, varname);
     }
 
 
@@ -98,6 +97,10 @@ void parseElement(const tinyxml2::XMLElement* elem) {
 
             auto type = parseType(res->Attribute("base"), "", "");
             tp.super = type.type;
+
+            type.type = "";
+            tp.attributes.emplace_back(type);
+            tp.is_typedef = true;
 
         } else if(un != nullptr) {
 
@@ -180,10 +183,11 @@ void parseElement(const tinyxml2::XMLElement* elem) {
                 auto type   = se->Attribute("type");
 
                 // get attributes
-                auto attr = parseType(type, aName, string_format("__vec_%s", aName), true);
+                auto attr = parseType(type, aName, string_format("__vec_%s", aName));
 
                 // update data
                 attr.type = string_format("_Vector<%s>", attr.type.c_str());
+                //attr.parser = string_format("\ta = elem->FirstChildElement(\"%s\");\n\twhile(a != nullptr) {\n\t\ta = a->NextSiblingElement(\"%s\");\n\t}\n\n", name, name);
 
                 // add attribute
                 tp.attributes.emplace_back(attr);
@@ -239,14 +243,21 @@ void parseScheme(const tinyxml2::XMLElement* elem) {
 
 int main(int argc, char* argv[]) {
 
-    if(argc < 4)
+    if(argc < 3)
         throw std::invalid_argument("please provide file name");
+
+    // create file name
+    std::string filename(argv[1]);
+    std::string outpath(argv[2]);
+    std::string headerFile = outpath + "/generated.h";
+    std::string sourceFile = outpath + "/generated.cc";
+
 
     // xml document
     tinyxml2::XMLDocument xml_doc;
 
     // load and check file
-    tinyxml2::XMLError eResult = xml_doc.LoadFile(argv[1]);
+    tinyxml2::XMLError eResult = xml_doc.LoadFile(filename.c_str());
     if (eResult != tinyxml2::XML_SUCCESS)
         throw std::runtime_error("File could not be loaded!");
 
@@ -261,7 +272,7 @@ int main(int argc, char* argv[]) {
 
     // write the shit to a file
     std::ofstream fs;
-    fs.open(argv[2]);
+    fs.open(headerFile.c_str());
 
 
     fs << "#include <string>\n";
@@ -271,7 +282,7 @@ int main(int argc, char* argv[]) {
 
     // print class pre-definitions
     for(const auto &tp : types)
-        if(!tp.attributes.empty() || tp.super.empty())
+        if(!tp.is_typedef)
             fs << string_format("struct %s;\n", tp.name.c_str());
 
 
@@ -280,7 +291,7 @@ int main(int argc, char* argv[]) {
 
     // print class pre-definitions
     for(const auto &tp : types)
-        if(tp.attributes.empty() && !tp.super.empty())
+        if(tp.is_typedef)
             fs << string_format("typedef %s %s;\n", tp.super.c_str(), tp.name.c_str());
 
 
@@ -291,8 +302,7 @@ int main(int argc, char* argv[]) {
     // print class definitions
     for(const auto &tp : types) {
 
-
-        if(!tp.attributes.empty() || tp.super.empty()) {
+        if(!tp.is_typedef) {
 
             // super class
             auto sp = tp.super.empty() ? "" : string_format(" : public %s", tp.super.c_str());
@@ -320,15 +330,15 @@ int main(int argc, char* argv[]) {
 
     // write the shit to a file
     std::ofstream fscpp;
-    fscpp.open(argv[3]);
+    fscpp.open(sourceFile.c_str());
 
-
-    fscpp << "#include \"OpenDRIVE_1.5M.h\"\n\n";
+    fscpp << "#include \"generated.h\"\n\n";
 
     // print parse function
     for(const auto &tp : types) {
 
         fscpp << string_format("void parse_%s(tinyxml2::XMLElement *elem, %s& t) {\n\n", tp.name.c_str(), tp.name.c_str());
+        fscpp << "\ttinyxml2::XMLElement *a = nullptr;\n\n";
 
         // iterate over attributes
         for(const auto &p : tp.attributes)
