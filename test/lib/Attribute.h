@@ -13,7 +13,7 @@ template<typename T>
 struct _Attribute : public std::unique_ptr<T> {
 
     _Attribute() = default;
-    ~_Attribute() = default;
+    virtual ~_Attribute() = default;
 
     explicit _Attribute(const T& v) {
         std::unique_ptr<T>(std::make_unique<T>(v));
