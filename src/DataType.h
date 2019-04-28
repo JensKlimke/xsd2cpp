@@ -43,6 +43,8 @@ struct DataType {
     virtual std::string typeDefString() = 0;
     virtual std::string typeDefStringFull() = 0;
 
+    virtual std::string typeUseString() = 0;
+
     virtual std::string parseString(const DataField *dv, const std::string &name) = 0;
     virtual std::string parseBody() = 0;
 
@@ -76,9 +78,9 @@ struct DataField {
     virtual std::string attributeString() {
 
         if(vector)
-            return string_format("std::vector<std::unique_ptr<%s>> %s{};", dataType->type.c_str(), fieldName.c_str());
+            return string_format("xsd::Vector<%s> %s{};", dataType->type.c_str(), fieldName.c_str());
         else
-            return string_format("%s %s;", dataType->type.c_str(), fieldName.c_str());
+            return string_format("%s %s;", dataType->typeUseString().c_str(), fieldName.c_str());
 
     }
 
@@ -102,17 +104,21 @@ struct DataType_Basic : public DataType {
         // c strings
         auto _orig = originalType.c_str();
 
-        if (strcmp(_orig, "xs:double") == 0) {
-            superType = string_format("_Attribute<%s>", "double");
-        } else if (strcmp(_orig, "xs:integer") == 0) {
-            superType = string_format("_Attribute<%s>", "int");
-        } else if (strcmp(_orig, "xs:nonNegativeInteger") == 0) {
-            superType = string_format("_Attribute<%s>", "unsigned int");
-        } else if (strcmp(_orig, "xs:string") == 0) {
-            superType = string_format("_Attribute<%s>", "std::string");
-        } else if (strcmp(_orig, "xs:float") == 0) {
-            superType = string_format("_Attribute<%s>", "float");
-        } else {
+        if (strcmp(_orig, "xs:double") == 0)
+            superType = "xsd::d_double";
+        else if (strcmp(_orig, "xs:integer") == 0)
+            superType = "xsd::d_int";
+        else if (strcmp(_orig, "xs:nonNegativeInteger") == 0)
+            superType = "xsd::d_uint";
+        else if (strcmp(_orig, "xs:negativeInteger") == 0)
+            superType = "xsd::d_int";
+        else if (strcmp(_orig, "xs:positiveInteger") == 0)
+            superType = "xsd::d_uint";
+        else if (strcmp(_orig, "xs:string") == 0)
+            superType = "xsd::d_string";
+        else if (strcmp(_orig, "xs:float") == 0)
+            superType = "xsd::d_float";
+        else {
             auto err = string_format("unknown type %s", _orig);
             throw std::runtime_error(err.c_str());
         }
@@ -120,6 +126,13 @@ struct DataType_Basic : public DataType {
         // set type if not set before
         if(type.empty())
             type = superType;
+
+    }
+
+
+    std::string typeUseString() override {
+
+        return type;
 
     }
 
@@ -147,15 +160,19 @@ struct DataType_Basic : public DataType {
 
         std::string parseString;
         if (strcmp(_orig, "xs:double") == 0)
-            parseString = string_format("%s = e->DoubleAttribute(%s, 0.0);", _fieldName, _name);
+            parseString = string_format("%s = elem->DoubleAttribute(%s, 0.0);", _fieldName, _name);
         else if (strcmp(_orig, "xs:integer") == 0)
-            parseString = string_format("%s = e->IntAttribute(%s, 0);", _fieldName, _name);
+            parseString = string_format("%s = elem->IntAttribute(%s, 0);", _fieldName, _name);
         else if (strcmp(_orig, "xs:nonNegativeInteger") == 0)
-            parseString = string_format("%s = e->UnsignedAttribute(%s, 0);", _fieldName, _name);
+            parseString = string_format("%s = elem->UnsignedAttribute(%s, 0);", _fieldName, _name);
+        else if (strcmp(_orig, "xs:negativeInteger") == 0)
+            parseString = string_format("%s = elem->IntAttribute(%s, 0);", _fieldName, _name);
+        else if (strcmp(_orig, "xs:positiveInteger") == 0)
+            parseString = string_format("%s = elem->UnsignedAttribute(%s, 0);", _fieldName, _name);
         else if (strcmp(_orig, "xs:string") == 0)
-            parseString = string_format("%s = std::string(e->Attribute(%s));", _fieldName, _name);
+            parseString = string_format("%s = std::string(elem->Attribute(%s));", _fieldName, _name);
         else if (strcmp(_orig, "xs:float") == 0)
-            parseString = string_format("%s = e->FloatAttribute(%s, 0.0f);", _fieldName, _name);
+            parseString = string_format("%s = elem->FloatAttribute(%s, 0.0f);", _fieldName, _name);
         else {
             auto err = string_format("unknown type %s", _orig);
             throw std::runtime_error(err.c_str());
@@ -211,7 +228,7 @@ struct DataType_Simple : public DataType_Basic {
 
 
 
-struct DataType_Union : public DataType {
+/*struct DataType_Union : public DataType {
 
     std::vector<DataType*> subTypes{};
 
@@ -238,13 +255,13 @@ struct DataType_Union : public DataType {
 
         std::string st = superType.empty() ? "" : string_format(" : public %s", superType.c_str());
 
-        std::string ret = string_format("struct %s%s {\n", type.c_str(), st.c_str());
+        std::string ret = string_format("\tstruct %s%s {\n", type.c_str(), st.c_str());
 
         size_t i = 0;
         for(const auto &e : subTypes)
-            ret += string_format("\tstd::unique_ptr<%s> _v%d;\n", e->type.c_str(), i++);
+            ret += string_format("\t\tstd::unique_ptr<%s> _v%d;\n", e->type.c_str(), i++);
 
-        ret += "};";
+        ret += "\t};";
 
         return ret;
 
@@ -272,7 +289,7 @@ struct DataType_Union : public DataType {
 
     }
 
-};
+}; */
 
 
 
@@ -283,14 +300,6 @@ struct DataType_Complex : public DataType {
 
     DataType_Complex() = default;
     ~DataType_Complex() override = default;
-
-
-    std::string parseString(const DataField *dv, const std::string &name) override {
-
-        // bool __parse__t_road_link(const tinyxml2::XMLElement *elem, const std::string &name, t_road_link &obj);
-        return string_format("__parse__%s(e, \"%s\", %s%s);", type.c_str(), dv->originalName.c_str(), name.c_str(), dv->fieldName.c_str());
-
-    }
 
 
     std::string typeDefString() override {
@@ -304,21 +313,44 @@ struct DataType_Complex : public DataType {
 
         std::string st = superType.empty() ? "" : string_format(" : public %s", superType.c_str());
 
-        std::string ret = string_format("struct %s%s {\n", type.c_str(), st.c_str());
+        std::string ret = string_format("\tstruct %s%s {\n", type.c_str(), st.c_str());
 
         for(const auto &e : subs) {
             auto f = e.second->attributeString();
-            ret += f.empty() ? "" : "\t" + f + "\n";
+            ret += f.empty() ? "" : "\t\t" + f + "\n";
         }
 
         for(const auto &e : attr) {
             auto f = e.second->attributeString();
-            ret += f.empty() ? "" : "\t" + f + "\n";
+            ret += f.empty() ? "" : "\t\t" + f + "\n";
         }
 
-        ret += "};";
+        ret += "\t};";
 
         return ret;
+
+    }
+
+
+    std::string typeUseString() override {
+
+        return string_format("xsd::Attribute<%s>", type.c_str());
+
+    }
+
+
+    std::string parseString(const DataField *dv, const std::string &name) override {
+
+        // bool __parse__t_road_link(const tinyxml2::XMLElement *elem, const std::string &name, t_road_link &obj);
+        if(dv->vector) {
+
+            return string_format("\t\tobj.%s.emplace_back();", dv->fieldName.c_str()) + "\n"
+                   + string_format("\t\t__parse__%s(e, obj.%s.back());", type.c_str(), dv->fieldName.c_str());
+
+        } else {
+
+            return string_format("__parse__%s(e, *(%s%s.create()));", type.c_str(), name.c_str(), dv->fieldName.c_str());
+        }
 
     }
 
@@ -326,19 +358,41 @@ struct DataType_Complex : public DataType {
     std::string parseBody() override {
 
         std::string res{};
-        res = "\n\tauto e = elem->FirstChildElement(name.c_str());\n\tsize_t i = 0;\n\twhile(e != nullptr) {\n\t\t";
-        res += string_format("\n\t\tauto tmp = std::make_unique<%s>();\n", type.c_str());
 
+        // parse super type
+        if(!superType.empty())
+            res += string_format("\t__parse__%s(elem, obj);\n\n", superType.c_str());
+
+
+        // parse attributes
         for(const auto &e : attr) {
-            res += "\t\tif(e->Attribute(\"" + e.second->originalName + "\") != nullptr)\n";
-            res += "\t\t\t" + e.second->dataType->parseString(e.second, "tmp->") + "\n";
+            res += "\tif(elem->Attribute(\"" + e.second->originalName + "\") != nullptr)\n";
+            res += "\t\t" + e.second->dataType->parseString(e.second, "obj.") + "\n\n";
         }
 
-        for(const auto &e : subs)
-            res += "\t\t" + e.second->dataType->parseString(e.second, "tmp->") + "\n";
 
-        res += "\n\t\tobj.emplace_back(std::move(tmp));\n";
-        res += "\n\t\ti++;\n\t\te = e->NextSiblingElement(name.c_str());\n\t}";
+        // create temporary variable
+        if(!subs.empty())
+            res += "\tconst tinyxml2::XMLElement *e;\n\n";
+
+        // parse complex fields
+        for(const auto &e : subs) {
+
+            if(e.second->vector) {
+
+                res += "\te = elem->FirstChildElement(\"" + e.second->originalName + "\");\n";
+                res += "\twhile(e != nullptr) {\n\n";
+                res += e.second->dataType->parseString(e.second, "obj.") + "\n";
+                res += "\n\t\te = e->NextSiblingElement(\"" + e.second->originalName + "\");\n\t}\n\n";
+
+            } else {
+
+                res += "\te = elem->FirstChildElement(\"" + e.second->originalName + "\");\n";
+                res += "\tif(e != nullptr)\n";
+                res += "\t\t" + e.second->dataType->parseString(e.second, "obj.") + "\n\n";
+
+            }
+        }
 
         return res;
 
@@ -347,8 +401,7 @@ struct DataType_Complex : public DataType {
 
     std::string parseHeader() override {
 
-        return string_format("bool __parse__%s(const tinyxml2::XMLElement *elem, "
-                             "const std::string &name, std::vector<std::unique_ptr<%s>> &obj)", type.c_str(), type.c_str());
+        return string_format("bool __parse__%s(const tinyxml2::XMLElement *elem, %s &obj)", type.c_str(), type.c_str());
 
     }
 

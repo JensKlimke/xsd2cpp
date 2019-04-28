@@ -30,16 +30,69 @@ public:
     static void parseUnionType(const tinyxml2::XMLElement* elem, const std::string &name) {
 
         // create data type
-        auto tp = (DataType_Union*) DataType::dataTypes.at(name);
-        tp->originalType = name;
-
-        // get members
-        auto type  = elem->Attribute("memberTypes");
-        for(const auto &e : split(type))
-            tp->subTypes.emplace_back(DataType::dataTypes.at(e));
+        auto tp = (DataType_Simple*) DataType::dataTypes.at(name);
+        tp->type = name;
+        tp->originalType = "xs:string";
 
         // initialize
         tp->init();
+
+    }
+
+
+    static void parseAttribute(const tinyxml2::XMLElement* attr, DataType_Complex* tp) {
+
+        auto an = std::string(attr->Attribute("name"));
+        auto at = std::string(attr->Attribute("type"));
+
+        // create data field
+        auto df = new DataField;
+
+        // create types
+        auto pre = at.substr(0, 3);
+        if(pre == "xs:") {
+            df->dataType = new DataType_Basic;
+            df->dataType->originalType = at;
+            df->dataType->init();
+        } else
+            df->dataType = DataType::dataTypes.at(at);
+
+        // set name
+        df->fieldName = "_" + an; //"_f__" + an;
+        df->originalName = an;
+
+        // add to list
+        tp->attr[df->fieldName] = df;
+
+    }
+
+
+    static void parseSubElement(const tinyxml2::XMLElement* sub, DataType_Complex* tp) {
+
+        // get name and type
+        auto an = std::string(sub->Attribute("name"));
+        auto at = std::string(sub->Attribute("type"));
+
+        // get bounds
+        std::string min = "0";
+        if(sub->Attribute("minOccurs") != nullptr)
+            min = std::string(sub->Attribute("minOccurs"));
+
+        std::string max = "unbounded";
+        if(sub->Attribute("maxOccurs") != nullptr)
+            max = std::string(sub->Attribute("maxOccurs"));
+
+        // create data field
+        auto df = new DataField;
+        df->fieldName = "sub_" + an; //"_s__" + an;
+        df->originalName = an;
+        df->dataType = DataType::dataTypes.at(at);
+
+        // save vector flag
+        df->vector = max == "unbounded";
+
+        // add to list
+        tp->subs[df->fieldName] = df;
 
     }
 
@@ -50,36 +103,46 @@ public:
         auto tp = (DataType_Complex*) DataType::dataTypes.at(name);
         tp->originalType = name;
 
+
+        // complex content
+        auto cc = elem->FirstChildElement("xs:complexContent");
+        if(cc != nullptr) {
+
+            // get super class
+            auto ext = cc->FirstChildElement("xs:extension");
+            auto clazz = DataType::dataTypes.at(ext->Attribute("base"));
+
+            // save super class
+            tp->superType = clazz->type;
+
+            // get members
+            auto attr = ext->FirstChildElement("xs:attribute");
+            while(attr != nullptr) {
+
+                // parse attribute
+                parseAttribute(attr, tp);
+
+                // next element
+                attr = attr->NextSiblingElement("xs:attribute");
+
+            }
+
+
+        }
+
+
         // get members
         auto attr = elem->FirstChildElement("xs:attribute");
         while(attr != nullptr) {
 
-            auto an = std::string(attr->Attribute("name"));
-            auto at = std::string(attr->Attribute("type"));
-
-            // create data field
-            auto df = new DataField;
-
-            // create types
-            auto pre = at.substr(0, 3);
-            if(pre == "xs:") {
-                df->dataType = new DataType_Basic;
-                df->dataType->originalType = at;
-                df->dataType->init();
-            } else
-                df->dataType = DataType::dataTypes.at(at);
-
-            // set name
-            df->fieldName = "_f__" + an;
-            df->originalName = an;
-
-            // add to list
-            tp->attr[df->fieldName] = df;
+            // parse attribute
+            parseAttribute(attr, tp);
 
             // next element
             attr = attr->NextSiblingElement("xs:attribute");
 
         }
+
 
         // get members
         auto seq = elem->FirstChildElement("xs:sequence");
@@ -88,22 +151,26 @@ public:
             auto sub = seq->FirstChildElement("xs:element");
             while (sub != nullptr) {
 
-                // get name and type
-                auto an = std::string(sub->Attribute("name"));
-                auto at = std::string(sub->Attribute("type"));
+                // parse element
+                parseSubElement(sub, tp);
+                sub = sub->NextSiblingElement("xs:element");
 
-                // create data field
-                auto df = new DataField;
-                df->fieldName = "_s__" + an;
-                df->originalName = an;
-                df->dataType = DataType::dataTypes.at(at);
-                df->vector = true;
+            }
 
-                // add to list
-                tp->subs[df->fieldName] = df;
+            auto ch = seq->FirstChildElement("xs:choice");
+            while (ch != nullptr) {
+
+                sub = ch->FirstChildElement("xs:element");
+                while (sub != nullptr) {
+
+                    // parse element
+                    parseSubElement(sub, tp);
+                    sub = sub->NextSiblingElement("xs:element");
+
+                }
 
                 // next element
-                sub = sub->NextSiblingElement("xs:element");
+                ch = ch->NextSiblingElement("xs:element");
 
             }
 
@@ -153,6 +220,20 @@ public:
 
 
         // iterate over complex types to process
+        st = elem->FirstChildElement("xs:element");
+        while(st != nullptr) {
+
+            // get name and create struct
+            auto name = st->Attribute("name");
+            parseTypes(st, name);
+
+            // get next one
+            st = st->NextSiblingElement("xs:element");
+
+        }
+
+
+        // iterate over complex types to process
         st = elem->FirstChildElement("xs:complexType");
         while(st != nullptr) {
 
@@ -168,20 +249,6 @@ public:
 
             // get next one
             st = st->NextSiblingElement("xs:complexType");
-
-        }
-
-
-        // iterate over complex types to process
-        st = elem->FirstChildElement("xs:element");
-        while(st != nullptr) {
-
-            // get name and create struct
-            auto name = st->Attribute("name");
-            parseTypes(st, name);
-
-            // get next one
-            st = st->NextSiblingElement("xs:element");
 
         }
 
@@ -224,7 +291,7 @@ public:
             if(un != nullptr) {
 
                 // create data type
-                DataType::addDataType(ctName, new DataType_Union);
+                DataType::addDataType(ctName, new DataType_Simple);
 
             }
 

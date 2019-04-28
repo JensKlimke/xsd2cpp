@@ -15,5 +15,4 @@ add_subdirectory(lib/tinyxml2)
 add_executable(parse_xsd src/main.cpp src/functions.h src/XSDParser.h src/DataType.h)
 target_link_libraries(parse_xsd tinyxml2)
 
-add_subdirectory(test)
 
