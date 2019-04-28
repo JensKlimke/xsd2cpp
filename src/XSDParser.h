@@ -104,6 +104,16 @@ public:
         tp->originalType = name;
 
 
+        /* TODO: implement this
+         * also implement the shit for xsd:xxx
+        auto ct = elem->FirstChildElement("xs:complexType");
+        if(ct != nullptr) {
+
+            parseTypes(ct, name);
+            return;
+
+        }*/
+
         // complex content
         auto cc = elem->FirstChildElement("xs:complexContent");
         if(cc != nullptr) {
@@ -189,12 +199,15 @@ public:
         while(st != nullptr) {
 
             // get name and create struct
-            auto ctName = st->Attribute("name");
+            auto name = std::string(st->Attribute("name"));
+
+            if(!superName.empty())
+                name = superName + "_" + name;
 
             // check if restriction
             auto res = st->FirstChildElement("xs:restriction");
             if(res != nullptr)
-                parseRestrictedType(res, ctName);
+                parseRestrictedType(res, name);
 
             // get next one
             st = st->NextSiblingElement("xs:simpleType");
@@ -206,12 +219,15 @@ public:
         while(st != nullptr) {
 
             // get name and create struct
-            auto ctName = st->Attribute("name");
+            auto name = std::string(st->Attribute("name"));
+
+            if(!superName.empty())
+                name = superName + "_" + name;
 
             // check if union
             auto un = st->FirstChildElement("xs:union");
             if(un != nullptr)
-                parseUnionType(un, ctName);
+                parseUnionType(un, name);
 
             // get next one
             st = st->NextSiblingElement("xs:simpleType");
@@ -224,7 +240,11 @@ public:
         while(st != nullptr) {
 
             // get name and create struct
-            auto name = st->Attribute("name");
+            auto name = std::string(st->Attribute("name"));
+
+            if(!superName.empty())
+                name = superName + "_" + name;
+
             parseTypes(st, name);
 
             // get next one
@@ -238,14 +258,18 @@ public:
         while(st != nullptr) {
 
             // get name and create struct
-            auto ctName = st->Attribute("name");
+            std::string name;
 
             // get super name
-            if(ctName == nullptr)
-                ctName = superName.c_str();
+            if(st->Attribute("name") == nullptr)
+                name = superName;
+            else if(!superName.empty())
+                name = superName + "_" + name;
+            else
+                name = st->Attribute("name");
 
             // parse super type
-            parseComplexType(st, ctName);
+            parseComplexType(st, name);
 
             // get next one
             st = st->NextSiblingElement("xs:complexType");
