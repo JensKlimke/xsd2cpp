@@ -4,6 +4,8 @@
 #include <cmath>
 #include <fstream>
 #include <string>
+#include <memory>
+#include <algorithm>
 
 #include "comment.h"
 #include "functions.h"

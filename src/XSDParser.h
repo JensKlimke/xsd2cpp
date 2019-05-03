@@ -67,7 +67,7 @@ public:
     }
 
 
-    static void parseSubElement(const tinyxml2::XMLElement* sub, DataType_Complex* tp) {
+    static void parseSubElement(const tinyxml2::XMLElement *sub, DataType_Complex *tp, bool multiple = true) {
 
         // get name and type
         auto an = std::string(sub->Attribute("name"));
@@ -81,6 +81,12 @@ public:
         std::string max = "unbounded";
         if(sub->Attribute("maxOccurs") != nullptr)
             max = std::string(sub->Attribute("maxOccurs"));
+
+        // unset bounds, when not a potential vector
+        if (!multiple) {
+            min = "0";
+            max = "1";
+        }
 
         // create data field
         auto df = new DataField;
@@ -162,7 +168,7 @@ public:
             while (sub != nullptr) {
 
                 // parse element
-                parseSubElement(sub, tp);
+                parseSubElement(sub, tp, true);
                 sub = sub->NextSiblingElement("xs:element");
 
             }
@@ -174,7 +180,7 @@ public:
                 while (sub != nullptr) {
 
                     // parse element
-                    parseSubElement(sub, tp);
+                    parseSubElement(sub, tp, true);
                     sub = sub->NextSiblingElement("xs:element");
 
                 }
@@ -183,6 +189,24 @@ public:
                 ch = ch->NextSiblingElement("xs:element");
 
             }
+
+        }
+
+
+        auto ch = elem->FirstChildElement("xs:choice");
+        while (ch != nullptr) {
+
+            auto sub = ch->FirstChildElement("xs:element");
+            while (sub != nullptr) {
+
+                // parse element
+                parseSubElement(sub, tp, false);
+                sub = sub->NextSiblingElement("xs:element");
+
+            }
+
+            // next element
+            ch = ch->NextSiblingElement("xs:element");
 
         }
 
