@@ -7,9 +7,12 @@ This little piece of software has the purpose (for me) to parse OpenDRIVE xsd fi
 see tests
 
 ## TODOs:
+* license to txt file
 * Linkage of objects by defined keys (indexing)
 * Work with other definition formats (e.g. xsd:: instead of xs::)
 * Header-file header comments
+* Default values (to be set by xsd and return in dereferencing, when not set)
+
 
 ## Copyright
 (c) 2019 Jens Klimke (jens.klimke@rwth-aachen.de)

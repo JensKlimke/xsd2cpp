@@ -5,6 +5,7 @@
 #ifndef PARSE_XSD_COMMENT_H
 #define PARSE_XSD_COMMENT_H
 
+#include <string>
 
 std::string license =   "/* %s\n"
                         " * \n"
