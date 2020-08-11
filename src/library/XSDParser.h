@@ -111,17 +111,6 @@ namespace xsd2cpp {
             auto tp = (DataType_Complex *) DataType::dataTypes.at(name);
             tp->originalType = name;
 
-
-            /* TODO: implement this
-             * also implement the shit for xsd:xxx
-            auto ct = elem->FirstChildElement("xs:complexType");
-            if(ct != nullptr) {
-
-                parseTypes(ct, name);
-                return;
-
-            }*/
-
             // complex content
             auto cc = elem->FirstChildElement("xs:complexContent");
             if (cc != nullptr) {
