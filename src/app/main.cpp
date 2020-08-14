@@ -1,45 +1,32 @@
-#include <iostream>
-#include <tinyxml2.h>
 #include <fstream>
-#include <string>
-
-#include "library/XSDParser.h"
-#include "library/code_generator.h"
-
+#include <xsd2cpp.h>
 
 int main(int argc, char *argv[]) {
 
     using namespace xsd2cpp;
 
-    if (argc < 5)
+    if (argc < 6)
         throw std::invalid_argument("please provide file name");
 
     // create file name
     std::string filename(argv[1]);
     std::string outPathPublic(argv[2]);
     std::string outPathPrivate(argv[3]);
-    std::string libName(argv[4]);
-    std::string libVersion(argv[5]);
+    std::string headerFilename(argv[4]);
+
+    // create config
+    xsd2cpp::Config config{};
+    config.libKey = argv[5];
+    config.libName = argv[6];
+    config.year = argv[7];
+    config.date = argv[8];
+    config.owner = argv[9];
+    config.email = argv[10];
 
     // create outputs
-    std::string structHeaderFile = outPathPublic  + "/" + libVersion + "_structure.h";
-    std::string headerFile       = outPathPrivate + "/" + libVersion + ".hpp";
-    std::string sourceFile       = outPathPrivate + "/" + libVersion + ".cc";
-
-
-    // xml document
-    tinyxml2::XMLDocument xml_doc;
-    tinyxml2::XMLError eResult = xml_doc.LoadFile(filename.c_str());
-    if (eResult != tinyxml2::XML_SUCCESS)
-        throw std::runtime_error("File could not be loaded!");
-
-    // get root element
-    auto schema = xml_doc.FirstChildElement("xs:schema");
-    if (schema == nullptr)
-        throw std::runtime_error("Schema element could not be found!");
-
-    // parse scheme
-    XSDParser::parseScheme(schema);
+    std::string structHeaderFile = outPathPublic + "/" + config.libName + ".h";
+    std::string headerFile = outPathPrivate + "/" + config.libName + ".hpp";
+    std::string sourceFile = outPathPrivate + "/" + config.libName + ".cc";
 
     // create files
     std::fstream fsp(structHeaderFile, std::ios::out);
@@ -47,7 +34,7 @@ int main(int argc, char *argv[]) {
     std::fstream fss(sourceFile, std::ios::out);
 
     // generate code
-    code_generator(fsp, fsh, fss, libVersion, libName);
+    xsd2cpp::xsd2cpp(filename, fsp, fsh, fss, headerFilename, config);
 
     // close streams
     fsp.close();

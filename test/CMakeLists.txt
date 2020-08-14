@@ -1,14 +1,18 @@
+# add definition
+add_definitions(-DRES_DIR=\"${PROJECT_SOURCE_DIR}/test/resources\")
+
 # create executable
-add_executable(TrafficSimulationTest
-        #TrafficSimulationTest.cpp
-        #UnitInterfaceTest.cpp
-        UnitTest.cpp
-        VehicleTest.cpp
-        )
+add_executable(LibTest
+        LibTest.cpp)
 
 # include directories
-target_include_directories(TrafficSimulationTest PRIVATE
-        ${PROJECT_SOURCE_DIR}/src/include) # library include directory
+target_include_directories(LibTest PRIVATE
+        ../src/xsd2cpp_lib)
+
+# link libraries
+target_link_libraries(LibTest PRIVATE
+        xsd2cpp_lib
+        )
 
 # add test
-add_gtest(TrafficSimulationTest)
+add_gtest(LibTest)

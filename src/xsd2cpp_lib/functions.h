@@ -2,12 +2,13 @@
 // Created by Jens Klimke on 2019-04-14.
 //
 
-#ifndef PARSE_XSD_FUNCTIONS_H
-#define PARSE_XSD_FUNCTIONS_H
+#ifndef XSD2CPP_FUNCTIONS_H
+#define XSD2CPP_FUNCTIONS_H
 
 #include <string>
 #include <sstream>
 #include <vector>
+
 
 /**
  * String formatter
@@ -25,20 +26,20 @@ std::string string_format(const std::string &format, Args ... args) {
 }
 
 
+/**
+ * Replaces a search string (from) within a string (str) by a string (to)
+ * @param str String to be searched in
+ * @param from String to be replaced
+ * @param to String to replace
+ * @return
+ */
+inline bool replace_string(std::string &str, const std::string &from, const std::string &to) {
+    size_t start_pos = str.find(from);
+    if (start_pos == std::string::npos)
+        return false;
+    str.replace(start_pos, from.length(), to);
+    return true;
+}
 
 
-//std::vector<std::string> split(const std::string& str, char delim = ' ')
-//{
-//    std::vector<std::string> cont;
-//
-//    std::stringstream ss(str);
-//    std::string token;
-//    while (std::getline(ss, token, delim))
-//        cont.push_back(token);
-//
-//    return cont;
-//
-//}
-
-
-#endif //PARSE_XSD_FUNCTIONS_H
+#endif //XSD2CPP_FUNCTIONS_H

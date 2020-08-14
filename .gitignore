@@ -35,3 +35,5 @@ cmake-*
 .idea
 test/generated*
 .DS_*
+
+test/out

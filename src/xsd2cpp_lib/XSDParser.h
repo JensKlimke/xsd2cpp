@@ -2,14 +2,12 @@
 // Created by Jens Klimke on 2019-04-26.
 //
 
-#ifndef PARSE_XSD_XSDPARSER_H
-#define PARSE_XSD_XSDPARSER_H
+#ifndef XSD2CPP_XSD_PARSER_H
+#define XSD2CPP_XSD_PARSER_H
 
 #include "DataType.h"
 
-
 namespace xsd2cpp {
-
 
     class XSDParser {
 
@@ -384,4 +382,4 @@ namespace xsd2cpp {
 }
 
 
-#endif //PARSE_XSD_XSDPARSER_H
+#endif // XSD2CPP_XSD_PARSER_H

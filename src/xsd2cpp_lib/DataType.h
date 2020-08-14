@@ -2,8 +2,8 @@
 // Created by Jens Klimke on 2019-04-26.
 //
 
-#ifndef PARSE_XSD_DATATYPE_H
-#define PARSE_XSD_DATATYPE_H
+#ifndef XSD2CPP_DATATYPE_H
+#define XSD2CPP_DATATYPE_H
 
 #include <string>
 #include <map>
@@ -339,7 +339,6 @@ namespace xsd2cpp {
 
         std::string parseString(const DataField *dv, const std::string &name) override {
 
-            // bool __parse__t_road_link(const tinyxml2::XMLElement *elem, const std::string &name, t_road_link &obj);
             if (dv->vector) {
 
                 return string_format("\t\tobj.%s.emplace_back();", dv->fieldName.c_str()) + "\n"
@@ -428,4 +427,4 @@ namespace xsd2cpp {
 
 }
 
-#endif //PARSE_XSD_DATATYPE_H
+#endif //XSD2CPP_DATATYPE_H
