@@ -16,9 +16,9 @@ include(GNUInstallDirs)
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
 # setup for tinyxml2
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "disable shared" FORCE)
-set(BUILD_STATIC_LIBS ON CACHE BOOL "enable static" FORCE)
-set(BUILD_TESTING off CACHE BOOL "disable tests" FORCE)
+set(BUILD_SHARED_LIBS OFF)
+set(BUILD_STATIC_LIBS ON)
+set(BUILD_TESTING OFF)
 
 # add tinyxml2 sources
 add_subdirectory(lib/tinyxml2)

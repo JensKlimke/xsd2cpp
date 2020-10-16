@@ -28,7 +28,7 @@
 #define RES_DIR "./"
 #endif
 
-TEST(LibTest, GenerateCode) {
+TEST(LibTest, OpenDRIVE_1_5) {
 
     using namespace xsd2cpp;
 
@@ -43,6 +43,37 @@ TEST(LibTest, GenerateCode) {
     // lib name and version
     std::string libName = "OpenDRIVE";
     std::string libVersion = "odr1_5";
+
+    // out streams
+    std::stringstream fsp;
+    std::stringstream fsh;
+    std::stringstream fss;
+
+    // run lib
+    xsd2cpp::xsd2cpp(filename, fsp, fsh, fss, headerFilename, Config());
+
+    // check
+    std::cout << fsp.str() << std::endl << std::endl << std::endl << std::endl;
+    std::cout << fsp.str() << std::endl << std::endl << std::endl << std::endl;
+    std::cout << fsp.str() << std::endl << std::endl << std::endl << std::endl;
+
+}
+
+TEST(LibTest, OpenSCENARIO_1_0) {
+
+    using namespace xsd2cpp;
+
+    // create file name
+    std::string filename(RES_DIR);
+    filename += "/OpenSCENARIO_1.0.xsd";
+
+    // create header filename
+    std::string headerFilename(RES_DIR);
+    headerFilename += "/header.txt";
+
+    // lib name and version
+    std::string libName = "OpenSCENARIO";
+    std::string libVersion = "osc1_0";
 
     // out streams
     std::stringstream fsp;
